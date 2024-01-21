@@ -1,0 +1,152 @@
+
+
+#include <Wire.h>
+#include <Wire.h>
+
+#include <Servo.h>
+
+#include <Servo.h>
+Servo Myservo;
+
+const int trigPin = 9;  // Trigger pin
+const int echoPin = 8; // Echo pin
+#define MLa 4         //left motor 1st pin
+#define MLb 5         //left motor 2nd pin
+#define MRa 6         //right motor 1st pin
+#define MRb 7 
+long duration;
+long distance;
+const int sensorPin1 = A0;
+const int sensorPin2 = A1;
+int moistureValue1;
+int moistureValue2;
+#define MLX90614_ADDRESS 0x5A // I2C address of the MLX90614
+
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(MLa, OUTPUT);    
+  pinMode(MLb, OUTPUT);
+  pinMode(MRa, OUTPUT);
+  pinMode(MRb, OUTPUT);
+  Myservo.attach(10);
+  Wire.begin();
+ 
+}
+
+void loop() {
+  // Trigger the ultrasonic sensor
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  
+  // Read the duration of the echo pulse
+  duration = pulseIn(echoPin, HIGH);
+  
+  // Calculate the distance in centimeters
+  distance = duration * 0.034 / 2;
+  
+  // Print the distance to the serial monitor
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.println(" cm");
+  delay(500);
+  
+  // Wait for a short moment before taking the nex
+  if (distance > 15)               // Condition For Absence Of Obstacle            
+  {
+    Myservo.write(90);
+    digitalWrite(MRb, HIGH);       // Move Forward
+    digitalWrite(MRa, LOW);
+    digitalWrite(MLb, HIGH);                                
+    digitalWrite(MLa, LOW);                                                       
+  }
+  else if ((distance < 10)&&(distance > 0))            // Condition For Presence Of Obstacle
+  {
+    digitalWrite(MRb, LOW);     //Stop                
+    digitalWrite(MRa, LOW);
+    digitalWrite(MLb, LOW);                                
+    digitalWrite(MLa, LOW);
+    delay(100);
+    
+    Myservo.write(0);
+    delay(500);
+    Myservo.write(180);
+    delay(500);
+    Myservo.write(90);
+    delay(500);
+    
+    digitalWrite(MRb, LOW);     // Move Backward             
+    digitalWrite(MRa, HIGH);
+    digitalWrite(MLb, LOW);                                
+    digitalWrite(MLa, HIGH);
+    delay(500);
+    digitalWrite(MRb, LOW);        //Stop                
+    digitalWrite(MRa, LOW);
+    digitalWrite(MLb, LOW);                                
+    digitalWrite(MLa, LOW);  
+    delay(100);  
+    digitalWrite(MRb, HIGH);     // Move Left     
+    digitalWrite(MRa, LOW);   
+    digitalWrite(MLa, LOW);                                 
+    digitalWrite(MLb, LOW);  
+    delay(500);
+    
+  
+}
+
+ // Read moisture values from the sensors
+  moistureValue1 = analogRead(sensorPin1);
+  moistureValue2 = analogRead(sensorPin2);
+
+  // Print the moisture values to the serial monitor
+  Serial.print("Moisture Sensor 1: ");
+  Serial.print(moistureValue1);
+  Serial.print("\t Moisture Sensor 2: ");
+  Serial.println(moistureValue2);
+
+  // Add a delay before taking the next reading
+  delay(1000);
+
+float temperature = readTemperature();
+  
+  Serial.print("Object Temperature: ");
+  Serial.print(temperature, 2); // Display temperature with 2 decimal places
+  Serial.println(" °C");
+
+  delay(1000); // Wait for a second
+}
+
+float readTemperature() {
+  Wire.beginTransmission(MLX90614_ADDRESS);
+  Wire.write(0x07); // Command to read object temperature
+  Wire.endTransmission();
+
+  Wire.requestFrom(MLX90614_ADDRESS, 3); // Read 3 bytes
+
+  if (Wire.available() >= 3) {
+    byte MSB = Wire.read();
+    byte LSB = Wire.read();
+    byte PEC = Wire.read();
+
+    int tempData = (MSB << 8) | LSB;
+
+    // Handle negative temperatures
+    if (tempData & 0x8000) {
+      tempData = ((tempData ^ 0xFFFF) + 1); // Two's complement
+    }
+
+    float temperature = tempData * 0.02 - 273.15;
+
+    return temperature;
+  } else {
+    Serial.println("Error reading temperature data");
+    return -1.0;
+  }
+  
+
+}
