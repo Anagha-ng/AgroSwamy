@@ -1,0 +1,195 @@
+// Libraries:
+#include <ESP8266WiFi.h>
+/* Add JSON Package and Install Board: esp8266 by ESP8266 Community */
+/* https://arduino.esp8266.com/stable/package_esp8266com_index.json */
+
+#include <DHT.h>
+/* Install: DHT sensor library by Adafruit */
+
+#include<LiquidCrystal_I2C.h>
+/* Add Zip: https://github.com/fdebrabander/Arduino-LiquidCrystal-I2C-library */
+
+#include<ThingSpeak.h>
+/* Install: ThingSpeak library by MathWorks */
+
+#include <Wire.h>
+/* Built-In Library */
+
+// Pin Numbers:
+#define DHT11_Pin 14
+#define MQ135_Pin A0
+
+// Configurations
+#define DHT_Type DHT11 // DHT11, DHT21, DHT22 etc..
+
+// Configuration: LCD Display
+const uint8_t I2C_Addr = 0x27; // I2C Address
+const uint8_t lcdNumCols = 16; // LCD's number of columns
+const uint8_t lcdNumRows = 2;  // LCD's number of rows
+
+// Configuration: Wi-Fi Credentials
+const char ssid[] = "Enter network password";   // Name of your network (Hotspot or Router name)
+const char pass[] = "atleasti";   // Corresponding Password
+
+// Configuration: Thing Speak
+unsigned long tsChannelID = 2297121;               //ThingSpeak Channel ID
+const char tsWriteAPIKey[] = "GNFJ83TCODIS3TN6";  //ThingSpeak Write API Key
+
+
+// Objects: DHT
+DHT dht(DHT11_Pin, DHT_Type);
+LiquidCrystal_I2C lcd(I2C_Addr, lcdNumCols, lcdNumRows);
+WiFiClient client;
+
+// Variables:
+int tempValue, humiValue, airValue;
+unsigned long prevUploadTime;
+int fieldIdx = 1;
+int result;
+
+void setup() {
+  /* Begin serial communication with Arduino and Arduino IDE (Serial Monitor) */
+  Serial.begin(9600);
+
+  /* Initialise the LCD Display */
+  lcd.begin();
+  lcd.backlight();  // turn on backlight.
+
+  bool wifiIsConnected = Connect2Wifi();
+  while (!wifiIsConnected) {
+    yield();
+  }
+
+  /* Initialize the DHT11 Sensor*/
+  dht.begin();
+  delay(100);
+
+  /* Initialize the I2C bus */
+  Wire.begin();
+
+  /* Initialize the ThingSpeak */
+  ThingSpeak.begin(client);
+  delay(100);
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("T:");
+  lcd.setCursor(8, 0);
+  lcd.print("H:");
+  lcd.setCursor(0, 1);
+  lcd.print("A:");
+}
+
+void loop() {
+  tempValue = dht.readTemperature();  // Gets the value of the temperature
+  humiValue = dht.readHumidity();     // Gets the value of the humidity
+
+  // Printing the results on the serial monitor
+  Serial.print("Temperature = ");
+  Serial.print(tempValue);
+  // Prints degree symbol using UTF-8 Unicode
+  Serial.print((char)0xC2);
+  Serial.print((char)0xB0);
+  Serial.println("C");
+
+  Serial.print("Humidity = ");
+  Serial.print(humiValue);
+  Serial.println("%");
+
+  lcd.setCursor(2, 0);
+  lcd.print("      ");    
+  lcd.setCursor(2, 0);
+  lcd.print(tempValue);
+  // Prints degree symbol
+  lcd.print((char)223);
+  lcd.print("C");
+
+  lcd.setCursor(10, 0);
+  lcd.print("      ");
+  lcd.setCursor(10, 0);
+  lcd.print(humiValue);
+  lcd.print("%");
+
+
+
+  airValue = analogRead(MQ135_Pin);
+  Serial.print("Air Quality Value = ");
+  Serial.print(airValue);
+  Serial.println();
+  if (airValue > 900) {
+    Serial.println("GAS Detected!");
+  }
+  lcd.setCursor(2, 1);
+  lcd.print("      ");
+  lcd.setCursor(2, 1);
+  lcd.print(airValue);
+
+
+  if (millis() - prevUploadTime > 16000) {
+    switch (fieldIdx) {
+      case 1:
+        Serial.println("Uploading Temperature Value to ThingSpeak...");
+        result = ThingSpeak.writeField(tsChannelID, fieldIdx, tempValue, tsWriteAPIKey);
+        fieldIdx = 2;
+        break;
+      case 2:
+        Serial.println("Uploading Humidity Value to ThingSpeak...");
+        result = ThingSpeak.writeField(tsChannelID, fieldIdx, humiValue, tsWriteAPIKey);
+        fieldIdx = 3;
+        break;
+      case 3:
+        Serial.println("Uploading Air Quality Value to ThingSpeak...");
+        result = ThingSpeak.writeField(tsChannelID, fieldIdx, airValue, tsWriteAPIKey);
+        fieldIdx = 1;
+        break;
+    }
+
+    if (result == 200) {
+      Serial.println("Upload successful.");
+    } else {
+      Serial.println("Upload Failed. Error:" + String(result));
+    }
+    prevUploadTime = millis();
+  }
+
+  /* Since sampling rate of DHT11 is 1Hz, Delay should be minimum 1sec */
+  delay(1200);
+}
+
+bool Connect2Wifi() {
+  int i = 0;
+
+  Serial.println("");
+  Serial.println("Connecting to WiFi");
+  lcd.print("Connecting to   ");
+  lcd.setCursor(0, 1);
+  lcd.print("Wi-Fi...        ");
+  delay(500);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, pass);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    if (i++ > 30) {
+      Serial.println("\nConnection failed!");
+      lcd.setCursor(0, 0);
+      lcd.print("Connection      ");
+      lcd.print("Failed!         ");
+      delay(1000);
+      return false;
+    }
+    delay(1000);
+  }
+  Serial.print("\nConnected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  lcd.setCursor(0, 0);
+  lcd.print("Connected to    ");
+  lcd.setCursor(0, 1);
+  lcd.print("Wi-Fi           ");
+  delay(1000);
+  return true;
+}
