@@ -1,0 +1,21 @@
+const int rainSensorPin = A0;
+const int buzzerPin = 9;
+
+void setup() {
+  pinMode(buzzerPin, OUTPUT);
+  Serial.begin(9600);
+  }
+void loop() {
+  int sensorValue = analogRead(rainSensorPin);
+  int threshold = 1000;
+
+  if (sensorValue > threshold){
+     digitalWrite(buzzerPin, HIGH);
+     Serial.println("It's  not raining!");
+  } else {
+    digitalWrite(buzzerPin, LOW);
+    Serial.println("It's raining.");
+  }
+  delay(1000);
+  
+}
